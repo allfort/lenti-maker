@@ -1,3 +1,4 @@
+import os
 import bpy
 import mathutils
 from math import radians
@@ -211,6 +212,73 @@ def clear_parent(child):
     bpy.ops.object.parent_clear(type='CLEAR')
 
 
+# レンダリングする
+class LENTI_OT_Rendering(bpy.types.Operator):
+    bl_idname = "lenti.rendering"
+    bl_label = "撮影"
+    bl_description = "配置したカメラでレンダリングします。"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    # レンダリング結果を新しいウィンドウで開く
+    @classmethod
+    def open_render_result_window(cls, image_file):
+        # 新しいウィンドウ作成
+        bpy.ops.screen.area_dupli('INVOKE_DEFAULT')
+        area = bpy.context.window_manager.windows[-1].screen.areas[0]
+
+        # ImageEditorに
+        area.type = 'IMAGE_EDITOR'
+
+        # レンダリング画像を開く
+        image = bpy.data.images.load(image_file)
+        area.spaces[0].image = image
+
+    # 指定したカメラでレンダリングする
+    @classmethod
+    def render(cls, camera):
+        bpy.context.scene.camera = camera
+        print('render %s' % camera.name)
+        file = os.path.join(r'D:\Users\Me\Documents\Develop\Blender\LentiMaker', camera.name)
+        bpy.context.scene.render.filepath = file
+
+        # レンダリング
+        bpy.ops.render.render(write_still=True)
+
+        # レンダリング中の画像を新しいWindowで開く
+        cls.open_render_result_window(file + bpy.context.scene.render.file_extension)
+
+    # 配置したカメラでレンダリングする
+    @classmethod
+    def start_rendering(cls, context):
+        print("start rendering...")
+
+        # 元のシーンカメラを記憶しておく
+        priv_scene_cam = get_scene_camera()
+
+        # 全カメラレンダリング
+        for cam in bpy.data.objects:
+            if cam.type == 'CAMERA' and cam.name in [LENTI_OT_BuildStudio.get_render_camera_name(i) for i in
+                                                     range(context.scene.camNum)]:
+                cls.render(cam)
+
+        # シーンカメラを元に戻す
+        bpy.context.scene.camera = priv_scene_cam
+
+    @classmethod
+    def poll(cls, context):
+        # レンダリング用カメラがあれば
+        for obj in bpy.data.objects:
+            if obj.type == 'CAMERA' and obj.name in [LENTI_OT_BuildStudio.get_render_camera_name(i) for i in
+                                                     range(context.scene.camNum)]:
+                return True
+        return False
+
+    def execute(self, context):
+        # レンダリング
+        self.start_rendering(context)
+
+        return {'FINISHED'}
+
 # ツールシェルフにタブを追加
 class LENTI_PT_Menu(bpy.types.Panel):
     bl_label = "LentiMaker"     # タブに表示される文字列
@@ -276,6 +344,8 @@ class LENTI_PT_Menu(bpy.types.Panel):
         if self.isDispCamAngleDiffProperty():
             self.layout.prop(context.scene, "camAngleDiff")
 
+        # 撮影ボタン
+        self.layout.operator(LENTI_OT_Rendering.bl_idname)
 
 def register():
     bpy.utils.register_module(__name__)
