@@ -1,6 +1,7 @@
 import os
 import bpy
 import mathutils
+import queue
 from math import radians
 
 # アドオンに関する情報を保持する、bl_info変数
@@ -219,19 +220,11 @@ class LENTI_OT_Rendering(bpy.types.Operator):
     bl_description = "配置したカメラでレンダリングします。"
     bl_options = {'REGISTER', 'UNDO'}
 
-    # レンダリング結果を新しいウィンドウで開く
-    @classmethod
-    def open_render_result_window(cls, image_file):
-        # 新しいウィンドウ作成
-        bpy.ops.screen.area_dupli('INVOKE_DEFAULT')
-        area = bpy.context.window_manager.windows[-1].screen.areas[0]
-
-        # ImageEditorに
-        area.type = 'IMAGE_EDITOR'
-
-        # レンダリング画像を開く
-        image = bpy.data.images.load(image_file)
-        area.spaces[0].image = image
+    timer = None            # 定期実行のためのタイマー
+    is_cancel = None        # レンダリングがキャンセルされたかどうか
+    is_rendering = None     # レンダリング中かどうか
+    render_queue = None     # レンダリング待ちカメラのキュー
+    priv_scene_cam = None   # レンダリング開始前のアクティブカメラを保持しておく
 
     # 指定したカメラでレンダリングする
     @classmethod
@@ -242,27 +235,32 @@ class LENTI_OT_Rendering(bpy.types.Operator):
         bpy.context.scene.render.filepath = file
 
         # レンダリング
-        bpy.ops.render.render(write_still=True)
-
-        # レンダリング中の画像を新しいWindowで開く
-        cls.open_render_result_window(file + bpy.context.scene.render.file_extension)
+        bpy.ops.render.render('INVOKE_DEFAULT', write_still=True)
 
     # 配置したカメラでレンダリングする
-    @classmethod
-    def start_rendering(cls, context):
+    def start_rendering(self):
         print("start rendering...")
+        self.is_cancel = False
+        self.is_rendering = False
 
         # 元のシーンカメラを記憶しておく
-        priv_scene_cam = get_scene_camera()
+        self.priv_scene_cam = get_scene_camera()
 
-        # 全カメラレンダリング
+        # レンダリングカメラを登録
+        self.render_queue = queue.Queue()
         for cam in bpy.data.objects:
             if cam.type == 'CAMERA' and cam.name in [LENTI_OT_BuildStudio.get_render_camera_name(i) for i in
-                                                     range(context.scene.camNum)]:
-                cls.render(cam)
+                                                     range(bpy.context.scene.camNum)]:
+                self.render_queue.put(cam)
 
-        # シーンカメラを元に戻す
-        bpy.context.scene.camera = priv_scene_cam
+        # レンダリング状況通知を受け取るためのハンドラー登録
+        bpy.app.handlers.render_pre.append(self.pre)
+        bpy.app.handlers.render_post.append(self.post)
+        bpy.app.handlers.render_cancel.append(self.canceled)
+
+        # レンダリング状況を監視するための定期処理登録
+        self.timer = bpy.context.window_manager.event_timer_add(0.5, window=bpy.context.window)
+        bpy.context.window_manager.modal_handler_add(self)
 
     @classmethod
     def poll(cls, context):
@@ -273,11 +271,46 @@ class LENTI_OT_Rendering(bpy.types.Operator):
                 return True
         return False
 
-    def execute(self, context):
-        # レンダリング
-        self.start_rendering(context)
+    def pre(self, dummy, thrd=None):
+        print('pre')
+        self.is_rendering = True
 
-        return {'FINISHED'}
+    def post(self, dummy, thrd=None):
+        print('post')
+        self.is_rendering = False
+
+    def canceled(self, dummy, thrd=None):
+        print('canceled')
+        self.is_cancel = True
+
+    def modal(self, context, event):
+        print('modal')
+        if event.type == 'TIMER':
+
+            if self.render_queue.empty() or self.is_cancel:
+                print('finish')
+                # ハンドラー解除
+                bpy.app.handlers.render_pre.remove(self.pre)
+                bpy.app.handlers.render_post.remove(self.post)
+                bpy.app.handlers.render_cancel.remove(self.canceled)
+                bpy.context.window_manager.event_timer_remove(self.timer)
+
+                # シーンカメラを元に戻す
+                bpy.context.scene.camera = self.priv_scene_cam
+
+                return {'FINISHED'}
+
+            elif self.is_rendering is False:
+                self.render(self.render_queue.get())
+
+        return {'PASS_THROUGH'}
+
+    def execute(self, context):
+        # レンダリング開始
+        self.start_rendering()
+
+        return {'RUNNING_MODAL'}
+
 
 # ツールシェルフにタブを追加
 class LENTI_PT_Menu(bpy.types.Panel):
