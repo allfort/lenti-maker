@@ -2,6 +2,7 @@ import os
 import bpy
 import mathutils
 import queue
+import math
 from math import radians
 
 # アドオンに関する情報を保持する、bl_info変数
@@ -18,6 +19,7 @@ bl_info = {
     "tracker_url": "",
     "category": "Object"
 }
+
 
 # 撮影用のスタジオを構築する
 class LENTI_OT_BuildStudio(bpy.types.Operator):
@@ -311,6 +313,37 @@ class LENTI_OT_Rendering(bpy.types.Operator):
 
         return {'RUNNING_MODAL'}
 
+# 設定反映
+class LENTI_OT_ApplySetting(bpy.types.Operator):
+    bl_idname = "lenti.apply_setting"
+    bl_label = "設定反映"
+    bl_description = "印刷・レンチキュラープロパティの設定を反映します。"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    # レンダリング画像の解像度を算出する
+    def get_render_size(self, context):
+        # 印刷サイズ設定からレンダリング解像度を算出する
+        print_width_inch = context.scene.printWidthCm * 0.393701
+
+        # レンチキュラーのレンズ幅とずれないように端数をレンズ基準で調整する
+        lenz_count = math.ceil(context.scene.LPI * print_width_inch)
+        px_per_lenz = context.scene.DPI / context.scene.LPI
+
+        render_width_px = lenz_count * px_per_lenz
+        render_height_px = round((context.scene.printHeightCm / context.scene.printWidthCm) * render_width_px)
+
+        return render_width_px, render_height_px
+
+    def execute(self, context):
+        # レンダリング解像度設定
+        render_width, render_height = self.get_render_size(context)
+
+        scene = bpy.data.scenes["Scene"]
+        scene.render.resolution_x = render_width
+        scene.render.resolution_y = render_height
+
+        return {'FINISHED'}
+
 
 # ツールシェルフにタブを追加
 class LENTI_PT_Menu(bpy.types.Panel):
@@ -351,6 +384,16 @@ class LENTI_PT_Menu(bpy.types.Panel):
     def isDispCamAngleDiffProperty(cls):
         return LENTI_OT_BuildStudio.get_focus_object() is not None
 
+    # 印刷DPIプロパティ（1インチあたりに何個ドット並んでいるかという解像度の単位）
+    bpy.types.Scene.DPI = bpy.props.IntProperty(default=300, name='DPI', min=100)
+
+    # レンチキュラーLPIプロパティ（1インチあたりに何個レンズ（かまぼこ）があるかという単位）
+    bpy.types.Scene.LPI = bpy.props.IntProperty(default=60, name='LPI', min=10)
+
+    # 印刷サイズプロパティ(cm)
+    bpy.types.Scene.printWidthCm = bpy.props.FloatProperty(default=9.1, name='PrintWidthCm', min=1.0)
+    bpy.types.Scene.printHeightCm = bpy.props.FloatProperty(default=5.5, name='PrintHeightCm', min=1.0)
+
     # 焦点距離設定プロパティ
     bpy.types.Scene.focusDist = bpy.props.FloatProperty(default=3.0, name='FocusDist', min=1.0, update=onFocusDistUpdate)
 
@@ -362,6 +405,33 @@ class LENTI_PT_Menu(bpy.types.Panel):
 
     # メニューの描画処理
     def draw(self, context):
+
+        self.layout.label(text="設定")
+
+        # 印刷設定プロパティ
+        self.layout.prop(context.scene, "DPI")
+
+        # レンチキュラーレンズ設定プロパティ
+        self.layout.prop(context.scene, "LPI")
+
+        # レンチキュラーのレンズ1かまぼこ当たりの画像ピクセル数を表示する
+        # この値が視差画像の制限枚数となる
+        px_per_lenz = context.scene.DPI / context.scene.LPI
+        self.layout.label(text="1レンズあたり %f px" % px_per_lenz)
+
+        # 1レンズあたりのピクセル数が整数でなければ注意表示をする
+        if not px_per_lenz.is_integer():
+            self.layout.label(text="1レンズあたりのピクセル数が整数になるよう設定してください。", icon='ERROR')
+
+        # 印刷サイズ
+        self.layout.prop(context.scene, "printWidthCm")
+        self.layout.prop(context.scene, "printHeightCm")
+
+        # 設定反映ボタン
+        self.layout.operator(LENTI_OT_ApplySetting.bl_idname)
+
+        self.layout.separator()     # ------------------------------------------
+
         # 焦点設定ボタン
         self.layout.operator(LENTI_OT_BuildStudio.bl_idname)
 
@@ -373,9 +443,18 @@ class LENTI_PT_Menu(bpy.types.Panel):
         if self.isDispCamNumProperty():
             self.layout.prop(context.scene, "camNum")
 
+        # レンダリングカメラ数が不適切であれば注意表示
+        max_cam_num = context.scene.DPI / context.scene.LPI
+        if context.scene.camNum > max_cam_num:
+            self.layout.label(text="カメラ数は %d 以下に設定してください。" % max_cam_num, icon='ERROR')
+        if not (max_cam_num / context.scene.camNum).is_integer():
+            self.layout.label(text="カメラ数は最大値 %d を割り切れる数に設定してください。" % max_cam_num, icon='ERROR')
+
         # カメラ配置間隔設定
         if self.isDispCamAngleDiffProperty():
             self.layout.prop(context.scene, "camAngleDiff")
+
+        self.layout.separator()     # ------------------------------------------
 
         # 撮影ボタン
         self.layout.operator(LENTI_OT_Rendering.bl_idname)
