@@ -244,6 +244,11 @@ class LENTI_OT_Rendering(bpy.types.Operator):
     def get_output_directory(cls):
         return os.path.join(get_output_base_directory(), 'RenderResult')
 
+    # レンダリングした画像のパスのリストを取得する
+    @classmethod
+    def get_rendered_image_path_list(cls):
+        return [os.path.join(cls.get_output_directory(), f) for f in os.listdir(cls.get_output_directory())]
+
     # 指定したカメラでレンダリングする
     @classmethod
     def render(cls, camera):
@@ -366,6 +371,7 @@ class LENTI_OT_ApplySetting(bpy.types.Operator):
         scene = bpy.data.scenes["Scene"]
         scene.render.resolution_x = render_width
         scene.render.resolution_y = render_height
+        scene.render.resolution_percentage = 100
 
         return {'FINISHED'}
 
@@ -378,10 +384,55 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
+    def get_result_image_path(cls):
+        file_name = 'result'
+        suffix = '.png'
+        return os.path.join(get_output_base_directory(), file_name + suffix)
+
+    # レンチキュラー画像生成
+    def generate(self):
+        # 新規画像作成
+        scene = bpy.data.scenes["Scene"]
+        new_image = bpy.data.images.new("result", width=scene.render.resolution_x, height=scene.render.resolution_y)
+
+        width = new_image.size[0]
+        height = new_image.size[1]
+        pixels = [None] * width * height
+
+        # 画像読み込み
+        rendered_image_path_list = LENTI_OT_Rendering.get_rendered_image_path_list()
+        image_list = [bpy.data.images.load(path, check_existing=False) for path in rendered_image_path_list]
+        pixels_list = [list(img.pixels[:]) for img in image_list]
+
+        # ピクセル設定
+        image_count = len(image_list)
+        for x in range(width):
+            img_select = x % image_count
+            for y in range(height):
+                r = pixels_list[img_select][y * (width * 4) + x * 4 + 0]
+                g = pixels_list[img_select][y * (width * 4) + x * 4 + 1]
+                b = pixels_list[img_select][y * (width * 4) + x * 4 + 2]
+                a = pixels_list[img_select][y * (width * 4) + x * 4 + 3]
+
+                pixels[(y * width) + x] = [r, g, b, a]
+
+        # flatten list
+        pixels = [chan for px in pixels for chan in px]
+
+        # assign pixels
+        new_image.pixels = pixels
+
+        new_image.filepath_raw = self.get_result_image_path()
+        new_image.file_format = image_list[0].file_format
+        new_image.save()
+
+    @classmethod
     def poll(cls, context):
         return is_select_output_directory()
 
     def execute(self, context):
+        self.generate()
+
         return {'FINISHED'}
 
 
