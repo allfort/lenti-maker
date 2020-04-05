@@ -4,6 +4,7 @@ import mathutils
 import queue
 import math
 from math import radians
+from bpy_extras.io_utils import ExportHelper
 
 # アドオンに関する情報を保持する、bl_info変数
 bl_info = {
@@ -215,6 +216,16 @@ def clear_parent(child):
     bpy.ops.object.parent_clear(type='CLEAR')
 
 
+# 出力フォルダのベースディレクトリを取得する
+def get_output_base_directory():
+    return os.path.join(bpy.context.scene.outputDirectory, 'LentiMakerOutput')
+
+
+# 出力先が設定されているか
+def is_select_output_directory():
+    return len(bpy.context.scene.outputDirectory) is not 0
+
+
 # レンダリングする
 class LENTI_OT_Rendering(bpy.types.Operator):
     bl_idname = "lenti.rendering"
@@ -228,12 +239,21 @@ class LENTI_OT_Rendering(bpy.types.Operator):
     render_queue = None     # レンダリング待ちカメラのキュー
     priv_scene_cam = None   # レンダリング開始前のアクティブカメラを保持しておく
 
+    # 出力先ディレクトリを取得する
+    @classmethod
+    def get_output_directory(cls):
+        return os.path.join(get_output_base_directory(), 'RenderResult')
+
     # 指定したカメラでレンダリングする
     @classmethod
     def render(cls, camera):
+        # 出力先ディレクトリがなければ作成する
+        if not os.path.isdir(cls.get_output_directory()):
+            os.makedirs(cls.get_output_directory())
+
         bpy.context.scene.camera = camera
         print('render %s' % camera.name)
-        file = os.path.join(r'D:\Users\Me\Documents\Develop\Blender\LentiMaker', camera.name)
+        file = os.path.join(cls.get_output_directory(), camera.name)
         bpy.context.scene.render.filepath = file
 
         # レンダリング
@@ -266,6 +286,10 @@ class LENTI_OT_Rendering(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
+        # 出力先が選択されていれば
+        if not is_select_output_directory():
+            return False
+
         # レンダリング用カメラがあれば
         for obj in bpy.data.objects:
             if obj.type == 'CAMERA' and obj.name in [LENTI_OT_BuildStudio.get_render_camera_name(i) for i in
@@ -313,6 +337,7 @@ class LENTI_OT_Rendering(bpy.types.Operator):
 
         return {'RUNNING_MODAL'}
 
+
 # 設定反映
 class LENTI_OT_ApplySetting(bpy.types.Operator):
     bl_idname = "lenti.apply_setting"
@@ -342,6 +367,33 @@ class LENTI_OT_ApplySetting(bpy.types.Operator):
         scene.render.resolution_x = render_width
         scene.render.resolution_y = render_height
 
+        return {'FINISHED'}
+
+
+# 結果のレンチキュラー用画像を生成する
+class LENTI_OT_GenerateResultImage(bpy.types.Operator):
+    bl_idname = "lenti.generate_result_image"
+    bl_label = "画像生成"
+    bl_description = "レンチキュラー画像を生成する"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return is_select_output_directory()
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+
+# 出力先を選択する
+class LENTI_OT_SelectOutputDirectory(bpy.types.Operator, ExportHelper):
+    bl_idname = "lenti.select_output_directory"
+    bl_label = "出力先選択"
+
+    filename_ext = ""
+
+    def execute(self, context):
+        context.scene.outputDirectory = self.properties.filepath
         return {'FINISHED'}
 
 
@@ -403,6 +455,9 @@ class LENTI_PT_Menu(bpy.types.Panel):
     # レンダリングカメラ配置間隔設定プロパティ
     bpy.types.Scene.camAngleDiff = bpy.props.FloatProperty(default=30.0, name='camAngleDiff', min=15.0, update=onCameraAngleDiffUpdate)
 
+    # 出力先プロパティ
+    bpy.types.Scene.outputDirectory = bpy.props.StringProperty(subtype="FILE_PATH")
+
     # メニューの描画処理
     def draw(self, context):
 
@@ -456,8 +511,24 @@ class LENTI_PT_Menu(bpy.types.Panel):
 
         self.layout.separator()     # ------------------------------------------
 
+        # 出力先選択
+        col = self.layout.column()
+        row = col.row(align=True)
+        row.prop(context.scene, "outputDirectory", text='出力先')
+        row.operator(LENTI_OT_SelectOutputDirectory.bl_idname, icon="FILE_FOLDER", text="")
+
+        # 出力先が選択されてなければ注意表示
+        if not is_select_output_directory():
+            self.layout.label(text="出力先を選択してください。", icon='ERROR')
+
         # 撮影ボタン
         self.layout.operator(LENTI_OT_Rendering.bl_idname)
+
+        self.layout.separator()     # ------------------------------------------
+
+        # 画像生成ボタン
+        self.layout.operator(LENTI_OT_GenerateResultImage.bl_idname)
+
 
 def register():
     bpy.utils.register_module(__name__)
