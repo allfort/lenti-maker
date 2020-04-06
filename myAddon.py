@@ -231,6 +231,39 @@ def show_image(image_path):
     os.system('start %s' % image_path)
 
 
+# 画像をスクリーン上に印刷サイズで表示する
+def open_image_print_size(image_file, context):
+    # レンチキュラー画像のパスを取得
+    image_file = LENTI_OT_GenerateResultImage.get_result_image_path()
+
+    # 画面解像度・画像解像度取得
+    screen_resolution_x = context.scene.screenResolutionX
+    image_resolution_x = bpy.data.images.load(image_file).size[0]
+
+    # 画面サイズ・印刷画像サイズ算出
+    screen_size_inch = context.scene.screenSizeInch
+    screen_ratio_x, screen_ratio_y = map(int, context.scene.screenRatio.split(':'))
+    screen_width_cm = 2.54 * screen_size_inch / math.sqrt(1 + pow(screen_ratio_y / screen_ratio_x, 2))
+    print_width_cm = context.scene.printWidthCm
+
+    # 画像表示時の倍率算出
+    view_scale = (screen_resolution_x / image_resolution_x) * (print_width_cm / screen_width_cm)
+
+    # 画像を開く
+    open_image_new_window(image_file, view_scale)
+
+
+# 画像を別ウィンドウで開く
+def open_image_new_window(image_file, scale_factor):
+    bpy.ops.screen.area_dupli('INVOKE_DEFAULT')
+    area = bpy.context.window_manager.windows[-1].screen.areas[0]
+    area.type = 'IMAGE_EDITOR'
+    area.spaces[0].image = bpy.data.images.load(image_file)
+
+    override = {'area': area}
+    bpy.ops.image.view_zoom_ratio(override, ratio=scale_factor)
+
+
 # レンダリングする
 class LENTI_OT_Rendering(bpy.types.Operator):
     bl_idname = "lenti.rendering"
@@ -440,7 +473,7 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
         self.generate(context)
 
         # 生成完了時に画像を開く
-        show_image(self.get_result_image_path())
+        open_image_print_size(self.get_result_image_path(), context)
 
         return {'FINISHED'}
 
@@ -513,10 +546,18 @@ class LENTI_PT_Menu(bpy.types.Panel):
     bpy.types.Scene.camNum = bpy.props.IntProperty(default=2, name='camNum', min=2, update=onCamNumUpdate)
 
     # レンダリングカメラ配置間隔設定プロパティ
-    bpy.types.Scene.camAngleDiff = bpy.props.FloatProperty(default=30.0, name='camAngleDiff', min=15.0, update=onCameraAngleDiffUpdate)
+    bpy.types.Scene.camAngleDiff = bpy.props.FloatProperty(default=30.0, name='camAngleDiff', min=1.0, update=onCameraAngleDiffUpdate)
 
     # 出力先プロパティ
     bpy.types.Scene.outputDirectory = bpy.props.StringProperty()
+
+    # PCの画面解像度プロパティ
+    bpy.types.Scene.screenResolutionX = bpy.props.IntProperty(default=1920, name='ScreenResolutionX', min=100)
+    bpy.types.Scene.screenResolutionY = bpy.props.IntProperty(default=1080, name='ScreenResolutionY', min=100)
+
+    # PCの画面サイズプロパティ
+    bpy.types.Scene.screenSizeInch = bpy.props.FloatProperty(default=24.0, name='ScreenSizeInch', min=12.1)
+    bpy.types.Scene.screenRatio = bpy.props.StringProperty(default='16:9', name='ScreenRatio')
 
     # メニューの描画処理
     def draw(self, context):
@@ -588,6 +629,16 @@ class LENTI_PT_Menu(bpy.types.Panel):
 
         # 画像生成ボタン
         self.layout.operator(LENTI_OT_GenerateResultImage.bl_idname)
+
+        self.layout.separator()  # ------------------------------------------
+
+        # 解像度プロパティ
+        self.layout.prop(context.scene, "screenResolutionX")
+        self.layout.prop(context.scene, "screenResolutionY")
+
+        # 画面サイズプロパティ
+        self.layout.prop(context.scene, "screenSizeInch")
+        self.layout.prop(context.scene, "screenRatio")
 
 
 def register():
