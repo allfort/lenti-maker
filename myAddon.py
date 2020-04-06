@@ -390,7 +390,7 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
         return os.path.join(get_output_base_directory(), file_name + suffix)
 
     # レンチキュラー画像生成
-    def generate(self):
+    def generate(self, context):
         # 新規画像作成
         scene = bpy.data.scenes["Scene"]
         new_image = bpy.data.images.new("result", width=scene.render.resolution_x, height=scene.render.resolution_y)
@@ -406,8 +406,9 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
 
         # ピクセル設定
         image_count = len(image_list)
+        px_per_lenz = context.scene.DPI / context.scene.LPI
         for x in range(width):
-            img_select = x % image_count
+            img_select = math.floor((x % px_per_lenz) * (image_count / px_per_lenz))
             for y in range(height):
                 r = pixels_list[img_select][y * (width * 4) + x * 4 + 0]
                 g = pixels_list[img_select][y * (width * 4) + x * 4 + 1]
@@ -431,7 +432,7 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
         return is_select_output_directory()
 
     def execute(self, context):
-        self.generate()
+        self.generate(context)
 
         return {'FINISHED'}
 
