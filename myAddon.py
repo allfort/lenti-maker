@@ -508,7 +508,7 @@ class LENTI_PT_Menu(bpy.types.Panel):
     bpy.types.Scene.camAngleDiff = bpy.props.FloatProperty(default=30.0, name='camAngleDiff', min=15.0, update=onCameraAngleDiffUpdate)
 
     # 出力先プロパティ
-    bpy.types.Scene.outputDirectory = bpy.props.StringProperty(subtype="FILE_PATH")
+    bpy.types.Scene.outputDirectory = bpy.props.StringProperty()
 
     # メニューの描画処理
     def draw(self, context):
