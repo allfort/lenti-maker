@@ -226,6 +226,11 @@ def is_select_output_directory():
     return len(bpy.context.scene.outputDirectory) is not 0
 
 
+# 画像を別ウィンドウで開く
+def show_image(image_path):
+    os.system('start %s' % image_path)
+
+
 # レンダリングする
 class LENTI_OT_Rendering(bpy.types.Operator):
     bl_idname = "lenti.rendering"
@@ -433,6 +438,9 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
 
     def execute(self, context):
         self.generate(context)
+
+        # 生成完了時に画像を開く
+        show_image(self.get_result_image_path())
 
         return {'FINISHED'}
 
