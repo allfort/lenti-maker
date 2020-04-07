@@ -70,6 +70,8 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
     def create_render_camera(cls, number):
         render_camera = duplicate(get_scene_camera())
         render_camera.name = cls.get_render_camera_name(number)
+        # サイズを小さめにしておく
+        bpy.types.Camera(render_camera.data).draw_size = 0.6
         return render_camera
 
     # レンダリングカメラのオブジェクト名を取得する
