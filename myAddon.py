@@ -29,37 +29,14 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
     bl_description = "レンチキュラー撮影するためのスタジオを構築します。"
     bl_options = {'REGISTER', 'UNDO'}
 
-    FOCUS_OBJ_NAME = 'LentiFocus'       # 焦点オブジェクトのオブジェクト名
     PIVOT_OBJ_NAME = 'LentiPivot'       # レンダリングカメラの回転中心オブジェクト名
     RENDER_CAM_NAME = 'LentiCamera'     # レンダリングカメラのオブジェクト名
 
-    # レンダリングカメラの焦点オブジェクトを作成する
     @classmethod
-    def create_focus_object(cls, context):
-        bpy.ops.object.empty_add(type='PLAIN_AXES')
-        pivot_obj = context.active_object
-        pivot_obj.name = cls.FOCUS_OBJ_NAME
-        return pivot_obj
-
-    # 焦点オブジェクトを取得する
-    @classmethod
-    def get_focus_object(cls):
-        for obj in bpy.data.objects:
-            if obj.name == cls.FOCUS_OBJ_NAME:
-                return obj
-        return None
-
-    # 焦点距離を設定する
-    @classmethod
-    def set_focus_dist(cls, focusDist):
-        focus = cls.get_focus_object()
-        if focus is None:
-            return
-
-        # 焦点オブジェクトの位置を更新する
+    def get_focus_location(cls, context):
         camera = get_scene_camera()
         camera_dir = (camera.rotation_euler.to_quaternion() * mathutils.Vector((0, 0, -1))).normalized()
-        focus.location = camera.location + focusDist * camera_dir
+        return camera.location + context.scene.focusDist * camera_dir
 
     # レンダリングカメラの焦点オブジェクトを作成する
     @classmethod
@@ -102,7 +79,7 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
             if cam is None:
                 # レンダリングカメラの原点を焦点位置に設定する
                 priv_cursor_location = bpy.context.scene.cursor_location.copy()  # 3Dカーソルの位置を記憶しておく
-                bpy.context.scene.cursor_location = cls.get_focus_object().location
+                bpy.context.scene.cursor_location = cls.get_focus_location(context)
 
                 # 焦点位置にカメラの回転中心オブジェクトを作成する（オブジェクトの原点変更と同じだが、カメラの原点位置は変えられないため）
                 pivot = cls.create_pivot_object(context)
@@ -121,6 +98,9 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
                 # 3Dカーソルの位置を元に戻す
                 bpy.context.scene.cursor_location = priv_cursor_location
 
+                # pivotをシーンカメラの子に設定する
+                set_parent_keep_transform(pivot, get_scene_camera())
+
             # 既に作成済みのカメラがあれば
             else:
                 pivot = cam.parent
@@ -129,7 +109,7 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
                 clear_parent(cam)
 
                 # カメラ・回転中心オブジェクトを焦点位置に応じて再設定する
-                pivot.location = cls.get_focus_object().location
+                pivot.location = cls.get_focus_location(context)
                 pivot.rotation_euler = get_scene_camera().rotation_euler
 
                 # カメラ姿勢を一旦シーンカメラに戻す
@@ -143,6 +123,9 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
                 angle_diff = i * cam_angle_dist - (cam_num - 1) * cam_angle_dist / 2.0
                 cam.parent.rotation_euler.rotate_axis('Y', radians(angle_diff))
 
+                # pivotをシーンカメラの子に設定する
+                set_parent_keep_transform(pivot, get_scene_camera())
+
         # 不要なカメラを破棄する
         for obj in bpy.data.objects:
             if obj.type == 'CAMERA' and cls.RENDER_CAM_NAME in obj.name and obj.name not in [cls.get_render_camera_name(i) for i in range(cam_num)]:
@@ -155,20 +138,10 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        # シーンカメラが存在する & まだ焦点オブジェクトがないなら実行可能
-        is_exist_scene_camera = get_scene_camera() is not None
-        is_exist_focus_object = cls.get_focus_object() is not None
-        return is_exist_scene_camera and not is_exist_focus_object
+        # シーンカメラが存在するなら実行可能
+        return get_scene_camera() is not None
 
     def execute(self, context):
-        # カメラの焦点オブジェクトを作成
-        focus = self.create_focus_object(context)
-
-        # カメラの前方に焦点オブジェクトを移動
-        camera = get_scene_camera()
-        camera_dir = (camera.rotation_euler.to_quaternion() * mathutils.Vector((0, 0, -1))).normalized()
-        focus.location = camera.location + context.scene.focusDist * camera_dir
-
         # カメラを並べる
         self.arrange_camera(context)
 
@@ -500,16 +473,13 @@ class LENTI_PT_Menu(bpy.types.Panel):
 
     # 焦点距離更新時に呼び出される
     def onFocusDistUpdate(self, context):
-        focusDist = context.scene.focusDist
-        # 焦点オブジェクト位置を更新する
-        LENTI_OT_BuildStudio.set_focus_dist(focusDist)
         # カメラ位置を更新する
         LENTI_OT_BuildStudio.arrange_camera(context)
 
     # 焦点距離設定プロパティを表示するかどうか
     @classmethod
     def isDispFocusDistProperty(cls):
-        return LENTI_OT_BuildStudio.get_focus_object() is not None
+        return True
 
     # レンダリングカメラ数更新時に呼び出される
     def onCamNumUpdate(self, context):
@@ -518,7 +488,7 @@ class LENTI_PT_Menu(bpy.types.Panel):
     # レンダリングカメラ数設定プロパティを表示するかどうか
     @classmethod
     def isDispCamNumProperty(cls):
-        return LENTI_OT_BuildStudio.get_focus_object() is not None
+        return True
 
     # レンダリングカメラの配置間隔更新時に呼び出される
     def onCameraAngleDiffUpdate(self, context):
@@ -527,7 +497,7 @@ class LENTI_PT_Menu(bpy.types.Panel):
     # レンダリングカメラの配置間隔設定プロパティを表示するかどうか
     @classmethod
     def isDispCamAngleDiffProperty(cls):
-        return LENTI_OT_BuildStudio.get_focus_object() is not None
+        return True
 
     # 印刷DPIプロパティ（1インチあたりに何個ドット並んでいるかという解像度の単位）
     bpy.types.Scene.DPI = bpy.props.IntProperty(default=300, name='DPI', min=100)
