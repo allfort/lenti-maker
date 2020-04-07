@@ -97,6 +97,7 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
             clear_parent(cls.get_focus_object())
             # 焦点オブジェクトの位置更新
             cls.get_focus_object().location = cls.get_focus_location(context)
+            cls.get_focus_object().rotation_euler = get_scene_camera().rotation_euler
             # 親子関係を再設定
             set_parent_keep_transform(cls.get_focus_object(), get_scene_camera())
 
