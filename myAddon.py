@@ -263,6 +263,8 @@ class LENTI_OT_Rendering(bpy.types.Operator):
     # 指定したカメラでレンダリングする
     @classmethod
     def render(cls, camera):
+        cls.is_rendering = True
+        
         # 出力先ディレクトリがなければ作成する
         if not os.path.isdir(cls.get_output_directory()):
             os.makedirs(cls.get_output_directory())
@@ -315,7 +317,6 @@ class LENTI_OT_Rendering(bpy.types.Operator):
 
     def pre(self, dummy, thrd=None):
         print('pre')
-        self.is_rendering = True
 
     def post(self, dummy, thrd=None):
         print('post')
