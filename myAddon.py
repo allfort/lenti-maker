@@ -29,6 +29,7 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
     bl_description = "レンチキュラー撮影するためのスタジオを構築します。"
     bl_options = {'REGISTER', 'UNDO'}
 
+    FOCUS_OBJ_NAME = 'Focus'            # 焦点オブジェクトの名前
     PIVOT_OBJ_NAME = 'LentiPivot'       # レンダリングカメラの回転中心オブジェクト名
     RENDER_CAM_NAME = 'LentiCamera'     # レンダリングカメラのオブジェクト名
 
@@ -38,12 +39,30 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
         camera_dir = (camera.rotation_euler.to_quaternion() * mathutils.Vector((0, 0, -1))).normalized()
         return camera.location + context.scene.focusDist * camera_dir
 
-    # レンダリングカメラの焦点オブジェクトを作成する
+    # 焦点オブジェクトを作成する
     @classmethod
-    def create_pivot_object(cls, context):
+    def create_focus_object(cls, context):
         bpy.ops.object.empty_add(type='PLAIN_AXES')
         pivot_obj = context.active_object
+        pivot_obj.name = cls.FOCUS_OBJ_NAME
+        # レントゲン設定
+        pivot_obj.show_x_ray = True
+        return pivot_obj
+
+    # 焦点オブジェクトを取得する
+    @classmethod
+    def get_focus_object(cls):
+        for obj in bpy.data.objects:
+            if obj.name == cls.FOCUS_OBJ_NAME:
+                return obj
+
+    # レンダリングカメラのピボットを作成する
+    @classmethod
+    def create_pivot_object(cls, context):
+        bpy.ops.object.empty_add(type='SPHERE')
+        pivot_obj = context.active_object
         pivot_obj.name = cls.PIVOT_OBJ_NAME
+        pivot_obj.empty_draw_size = 0.01
         return pivot_obj
 
     # レンダリングカメラを作成する
@@ -71,6 +90,15 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
     def arrange_camera(cls, context):
         cam_num = context.scene.camNum
         cam_angle_dist = context.scene.camAngleDiff
+
+        # 焦点オブジェクトの位置を更新する
+        if cls.get_focus_object() is not None:
+            # 一旦カメラと焦点オブジェクトの親子関係を切る
+            clear_parent(cls.get_focus_object())
+            # 焦点オブジェクトの位置更新
+            cls.get_focus_object().location = cls.get_focus_location(context)
+            # 親子関係を再設定
+            set_parent_keep_transform(cls.get_focus_object(), get_scene_camera())
 
         for i in range(cam_num):
             cam = cls.get_render_camera(i)
@@ -142,6 +170,13 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
         return get_scene_camera() is not None
 
     def execute(self, context):
+        # 焦点オブジェクトを作成
+        focus = self.create_focus_object(context)
+        focus.location = self.get_focus_location(context)
+
+        # 焦点オブジェクトをシーンカメラの子供に
+        set_parent_keep_transform(focus, get_scene_camera())
+
         # カメラを並べる
         self.arrange_camera(context)
 
@@ -187,6 +222,19 @@ def clear_parent(child):
 
     # 親子設定解除
     bpy.ops.object.parent_clear(type='CLEAR')
+
+
+# ビューでオブジェクトを非表示にする
+def hide_object_in_view(object):
+    # 全オブジェクトの選択解除
+    bpy.ops.object.select_all(action='DESELECT')
+
+    # オブジェクト選択
+    object.select = True
+    bpy.context.scene.objects.active = object
+
+    # 非表示にする
+    bpy.context.object.hide = True
 
 
 # 出力フォルダのベースディレクトリを取得する
@@ -264,7 +312,7 @@ class LENTI_OT_Rendering(bpy.types.Operator):
     @classmethod
     def render(cls, camera):
         cls.is_rendering = True
-        
+
         # 出力先ディレクトリがなければ作成する
         if not os.path.isdir(cls.get_output_directory()):
             os.makedirs(cls.get_output_directory())
