@@ -314,8 +314,6 @@ class LENTI_OT_Rendering(bpy.types.Operator):
     # 指定したカメラでレンダリングする
     @classmethod
     def render(cls, camera):
-        cls.is_rendering = True
-
         # 出力先ディレクトリがなければ作成する
         if not os.path.isdir(cls.get_output_directory()):
             os.makedirs(cls.get_output_directory())
@@ -350,7 +348,7 @@ class LENTI_OT_Rendering(bpy.types.Operator):
         bpy.app.handlers.render_cancel.append(self.canceled)
 
         # レンダリング状況を監視するための定期処理登録
-        self.timer = bpy.context.window_manager.event_timer_add(0.5, window=bpy.context.window)
+        self.timer = bpy.context.window_manager.event_timer_add(1.0, window=bpy.context.window)
         bpy.context.window_manager.modal_handler_add(self)
 
     @classmethod
@@ -378,8 +376,8 @@ class LENTI_OT_Rendering(bpy.types.Operator):
         self.is_cancel = True
 
     def modal(self, context, event):
-        print('modal')
         if event.type == 'TIMER':
+            print('modal')
 
             if self.render_queue.empty() or self.is_cancel:
                 print('finish')
@@ -393,9 +391,13 @@ class LENTI_OT_Rendering(bpy.types.Operator):
                 bpy.context.scene.camera = self.priv_scene_cam
 
                 return {'FINISHED'}
-
-            elif self.is_rendering is False:
-                self.render(self.render_queue.get())
+            else:
+                if self.is_rendering is False:
+                    self.is_rendering = True
+                    self.render(self.render_queue.get())
+                else:
+                    # レンダリングが開始されてない事があるためレンダリングを定期的にコールする
+                    bpy.ops.render.render('INVOKE_DEFAULT', write_still=True)
 
         return {'PASS_THROUGH'}
 
