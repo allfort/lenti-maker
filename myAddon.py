@@ -379,7 +379,7 @@ class LENTI_OT_Rendering(bpy.types.Operator):
         if event.type == 'TIMER':
             print('modal')
 
-            if self.render_queue.empty() or self.is_cancel:
+            if (self.render_queue.empty() and self.is_rendering is False) or self.is_cancel:
                 print('finish')
                 # ハンドラー解除
                 bpy.app.handlers.render_pre.remove(self.pre)
