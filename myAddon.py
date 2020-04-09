@@ -471,14 +471,15 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
 
         # ピクセル設定
         image_count = len(image_list)
-        px_per_lenz = context.scene.DPI / context.scene.LPI
+        px_per_lenz = int(context.scene.DPI / context.scene.LPI)
         for x in range(width):
             img_select = math.floor((x % px_per_lenz) * (image_count / px_per_lenz))
+            x_ = x - (x % px_per_lenz) + int(x % (px_per_lenz / image_count)) * image_count
             for y in range(height):
-                r = pixels_list[img_select][y * (width * 4) + x * 4 + 0]
-                g = pixels_list[img_select][y * (width * 4) + x * 4 + 1]
-                b = pixels_list[img_select][y * (width * 4) + x * 4 + 2]
-                a = pixels_list[img_select][y * (width * 4) + x * 4 + 3]
+                r = pixels_list[img_select][y * (width * 4) + x_ * 4 + 0]
+                g = pixels_list[img_select][y * (width * 4) + x_ * 4 + 1]
+                b = pixels_list[img_select][y * (width * 4) + x_ * 4 + 2]
+                a = pixels_list[img_select][y * (width * 4) + x_ * 4 + 3]
 
                 pixels[(y * width) + x] = [r, g, b, a]
 
