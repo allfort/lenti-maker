@@ -416,22 +416,14 @@ class LENTI_OT_ApplySetting(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     # レンダリング画像の解像度を算出する
-    def get_render_size(self, context):
-        # 印刷サイズ設定からレンダリング解像度を算出する
-        print_width_inch = context.scene.printWidthCm * 0.393701
-
-        # レンチキュラーのレンズ幅とずれないように端数をレンズ基準で調整する
-        lenz_count = math.ceil(context.scene.LPI * print_width_inch)
-        px_per_lenz = context.scene.DPI / context.scene.LPI
-
-        render_width_px = lenz_count * px_per_lenz
-        render_height_px = round((context.scene.printHeightCm / context.scene.printWidthCm) * render_width_px)
-
-        return render_width_px, render_height_px
+    @classmethod
+    def trans_mm_to_pixel(cls, x_mm, y_mm, dpi):
+        inch_mm = 25.4
+        return x_mm * dpi / inch_mm, y_mm * dpi / inch_mm
 
     def execute(self, context):
         # レンダリング解像度設定
-        render_width, render_height = self.get_render_size(context)
+        render_width, render_height = self.trans_mm_to_pixel(context.scene.printWidthCm * 10, context.scene.printHeightCm * 10, context.scene.DPI)
 
         scene = bpy.data.scenes["Scene"]
         scene.render.resolution_x = render_width
