@@ -444,7 +444,7 @@ class LENTI_OT_ApplySetting(bpy.types.Operator):
 # 結果のレンチキュラー用画像を生成する
 class LENTI_OT_GenerateResultImage(bpy.types.Operator):
     bl_idname = "lenti.generate_result_image"
-    bl_label = "画像生成"
+    bl_label = "レンチキュラー画像生成"
     bl_description = "レンチキュラー画像を生成する"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -661,7 +661,7 @@ class LENTI_PT_Menu(bpy.types.Panel):
 
         self.layout.separator()     # ------------------------------------------
 
-        # 画像生成ボタン
+        # レンチキュラー画像生成ボタン
         self.layout.operator(LENTI_OT_GenerateResultImage.bl_idname)
 
         self.layout.separator()  # ------------------------------------------
