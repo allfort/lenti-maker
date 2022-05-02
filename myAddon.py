@@ -456,30 +456,28 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
 
     # レンチキュラー画像生成
     def generate(self, context):
-        # 新規画像作成
-        scene = bpy.data.scenes["Scene"]
-        new_image = bpy.data.images.new("result", width=scene.render.resolution_x, height=scene.render.resolution_y)
+        # 出力画像読み込み
+        rendered_image_path_list = LENTI_OT_Rendering.get_rendered_image_path_list()
+        image_list = [bpy.data.images.load(path, check_existing=False) for path in rendered_image_path_list]
+        pixels_list = [list(img.pixels[:]) for img in image_list]
+
+        # 出力画像作成
+        new_image = bpy.data.images.new("result", width=image_list[0].size[0], height=image_list[0].size[1])
 
         width = new_image.size[0]
         height = new_image.size[1]
         pixels = [None] * width * height
 
-        # 画像読み込み
-        rendered_image_path_list = LENTI_OT_Rendering.get_rendered_image_path_list()
-        image_list = [bpy.data.images.load(path, check_existing=False) for path in rendered_image_path_list]
-        pixels_list = [list(img.pixels[:]) for img in image_list]
-
         # ピクセル設定
         image_count = len(image_list)
         px_per_lenz = int(context.scene.DPI / context.scene.LPI)
         for x in range(width):
-            img_select = math.floor((x % px_per_lenz) * (image_count / px_per_lenz))
-            x_ = x - (x % px_per_lenz) + int(x % (px_per_lenz / image_count)) * image_count
+            img_select = math.floor(x * image_count / px_per_lenz) % (image_count - 1)
             for y in range(height):
-                r = pixels_list[img_select][y * (width * 4) + x_ * 4 + 0]
-                g = pixels_list[img_select][y * (width * 4) + x_ * 4 + 1]
-                b = pixels_list[img_select][y * (width * 4) + x_ * 4 + 2]
-                a = pixels_list[img_select][y * (width * 4) + x_ * 4 + 3]
+                r = pixels_list[img_select][y * (width * 4) + x * 4 + 0]
+                g = pixels_list[img_select][y * (width * 4) + x * 4 + 1]
+                b = pixels_list[img_select][y * (width * 4) + x * 4 + 2]
+                a = pixels_list[img_select][y * (width * 4) + x * 4 + 3]
 
                 pixels[(y * width) + x] = [r, g, b, a]
 
