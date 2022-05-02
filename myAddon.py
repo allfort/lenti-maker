@@ -430,6 +430,7 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
         # 出力画像読み込み
         rendered_image_path_list = LENTI_OT_Rendering.get_rendered_image_path_list()
         image_list = [bpy.data.images.load(path, check_existing=False) for path in rendered_image_path_list]
+        image_list.reverse()
         pixels_list = [list(img.pixels[:]) for img in image_list]
 
         # 出力画像作成
