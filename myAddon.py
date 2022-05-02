@@ -650,6 +650,15 @@ class LENTI_PT_Menu(bpy.types.Panel):
         # 撮影ボタン
         self.layout.operator(LENTI_OT_Rendering.bl_idname)
 
+        # 出力画像一覧
+        image_path_list = LENTI_OT_Rendering.get_rendered_image_path_list()
+
+        if len(image_path_list) > 0:
+            self.layout.label(text="出力画像一覧")
+
+        for i in range(len(image_path_list)):
+            self.layout.label(text="[" + str(i) + "] " + image_path_list[i])
+
         self.layout.separator()     # ------------------------------------------
 
         # 画像生成ボタン
