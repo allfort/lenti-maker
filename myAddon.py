@@ -168,6 +168,14 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
                 obj.select = True
                 bpy.ops.object.delete()
 
+    # 指定のカメラ視点に切り替える
+    @classmethod
+    def preview_camera(cls, context):
+        camera_index = context.scene.camPreview
+        bpy.context.scene.camera = LENTI_OT_BuildStudio.get_render_camera(camera_index)
+        bpy.context.area.type = 'VIEW_3D'
+        bpy.context.area.spaces[0].region_3d.view_perspective = 'CAMERA'
+
     @classmethod
     def poll(cls, context):
         # シーンカメラが存在するなら実行可能
@@ -503,7 +511,14 @@ class LENTI_PT_Menu(bpy.types.Panel):
 
     # レンダリングカメラ数更新時に呼び出される
     def onCamNumUpdate(self, context):
+        if context.scene.camPreview != context.scene.camNum:
+            bpy.types.Scene.camPreview = bpy.props.IntProperty(default=context.scene.camPreview, min=0, max=context.scene.camNum - 1)
+
         LENTI_OT_BuildStudio.arrange_camera(context)
+
+    # カメラプレビュー更新時に呼び出される
+    def onCamPreviewUpdate(self, context):
+        LENTI_OT_BuildStudio.preview_camera(context)
 
     # レンダリングカメラ数設定プロパティを表示するかどうか
     @classmethod
@@ -537,6 +552,9 @@ class LENTI_PT_Menu(bpy.types.Panel):
 
     # レンダリングカメラ配置間隔設定プロパティ
     bpy.types.Scene.camAngleDiff = bpy.props.FloatProperty(default=30.0, name='camAngleDiff', min=1.0, update=onCameraAngleDiffUpdate)
+
+    # レンダリングカメラプレビュー用プロパティ
+    bpy.types.Scene.camPreview = bpy.props.IntProperty(default=0, name='camPreview', min=0, max=5, update=onCamPreviewUpdate)
 
     # 出力先プロパティ
     bpy.types.Scene.outputDirectory = bpy.props.StringProperty()
@@ -591,6 +609,9 @@ class LENTI_PT_Menu(bpy.types.Panel):
         # カメラ配置間隔設定
         if self.isDispCamAngleDiffProperty():
             self.layout.prop(context.scene, "camAngleDiff")
+
+        # カメラプレビュー
+        self.layout.prop(context.scene, "camPreview", slider=True)
 
         self.layout.separator()     # ------------------------------------------
 
