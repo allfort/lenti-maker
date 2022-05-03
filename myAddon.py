@@ -256,15 +256,10 @@ def show_image(image_path):
     os.system('start %s' % image_path)
 
 
-# 画像を別ウィンドウで開く
-def open_image_new_window(image_file, scale_factor):
-    bpy.ops.screen.area_dupli('INVOKE_DEFAULT')
-    area = bpy.context.window_manager.windows[-1].screen.areas[0]
-    area.type = 'IMAGE_EDITOR'
-    area.spaces[0].image = bpy.data.images.load(image_file)
-
-    override = {'area': area}
-    bpy.ops.image.view_zoom_ratio(override, ratio=scale_factor)
+# 画像をメイン画面で開く
+def open_image_in_main_window(image_file):
+    bpy.context.area.type = 'IMAGE_EDITOR'
+    bpy.context.area.spaces[0].image = bpy.data.images.load(image_file)
 
 
 # レンダリングする
@@ -471,7 +466,7 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
         self.generate(context)
 
         # 生成完了時に画像を開く
-        open_image_new_window(self.get_result_image_path(), 1)
+        open_image_in_main_window(self.get_result_image_path())
 
         return {'FINISHED'}
 
