@@ -490,12 +490,50 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# 結果の立体視画像を生成する
-class LENTI_OT_GenerateStereoscopic(bpy.types.Operator):
+# 出力先を選択する
+class LENTI_OT_SelectOutputDirectory(bpy.types.Operator, ExportHelper):
+    bl_idname = "lenti.select_output_directory"
+    bl_label = "出力先選択"
+
+    filename_ext = ""
+
+    def execute(self, context):
+        context.scene.outputDirectory = self.properties.filepath
+        return {'FINISHED'}
+
+
+# 結果の立体視画像を生成のダイアログ表示
+class ShowStereoscopicDialogMenu(bpy.types.Operator):
     bl_idname = "lenti.generate_stereoscopic"
     bl_label = "立体視画像生成"
     bl_description = "立体視画像を生成する"
     bl_options = {'REGISTER', 'UNDO'}
+
+    def get_image_enum(self, context):
+        return [(path, path, path) for path in LENTI_OT_Rendering.get_rendered_image_path_list()]
+
+    left_image_prop = bpy.props.EnumProperty(
+        name="leftImage",
+        description="左側に表示する画像のインデックス",
+        items=get_image_enum
+    )
+
+    right_image_prop = bpy.props.EnumProperty(
+        name="rightImage",
+        description="右側に表示する画像のインデックス",
+        items=get_image_enum
+    )
+
+    def invoke(self, context, event):
+        wm = context.window_manager
+
+        # 左右の画像の初期値設定
+        image_enum = self.get_image_enum(context)
+        self.left_image_prop = str(image_enum[0][0])
+        self.right_image_prop = str(image_enum[len(image_enum) - 1][0])
+
+        # ダイアログメニュー呼び出し
+        return wm.invoke_props_dialog(self)
 
     @classmethod
     def get_result_image_path(cls):
@@ -551,24 +589,15 @@ class LENTI_OT_GenerateStereoscopic(bpy.types.Operator):
         return is_select_output_directory()
 
     def execute(self, context):
-        if not self.generate(context, 0, 1):
+        image_path_list = LENTI_OT_Rendering.get_rendered_image_path_list()
+        left_image_index = image_path_list.index(self.left_image_prop)
+        right_image_index = image_path_list.index(self.right_image_prop)
+        if not self.generate(context, left_image_index, right_image_index):
             return {'CANCELLED'}
 
         # 生成完了時に画像を開く
         open_image_in_main_window(self.get_result_image_path())
 
-        return {'FINISHED'}
-
-
-# 出力先を選択する
-class LENTI_OT_SelectOutputDirectory(bpy.types.Operator, ExportHelper):
-    bl_idname = "lenti.select_output_directory"
-    bl_label = "出力先選択"
-
-    filename_ext = ""
-
-    def execute(self, context):
-        context.scene.outputDirectory = self.properties.filepath
         return {'FINISHED'}
 
 
@@ -734,7 +763,7 @@ class LENTI_PT_Menu(bpy.types.Panel):
         self.layout.operator(LENTI_OT_GenerateResultImage.bl_idname)
 
         # 立体視画像生成ボタン
-        self.layout.operator(LENTI_OT_GenerateStereoscopic.bl_idname)
+        self.layout.operator(ShowStereoscopicDialogMenu.bl_idname)
 
 
 def register():
