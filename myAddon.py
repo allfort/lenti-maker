@@ -195,10 +195,15 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# シーンで設定されたカメラを取得する
-def get_scene_camera():
-    return bpy.context.scene.camera
+# すべてのカメラを取得する
+def get_camera_list():
+    return [cam for cam in bpy.data.objects if cam.type == "CAMERA"]
 
+
+# 選択中のカメラを取得する
+def get_scene_camera():
+    selected_index = int(bpy.context.scene.mainCamera)
+    return get_camera_list()[selected_index]
 
 # 指定したオブジェクトを複製する
 def duplicate(object):
@@ -534,6 +539,10 @@ class LENTI_PT_Menu(bpy.types.Panel):
     def isDispCamAngleDiffProperty(cls):
         return True
 
+    # 存在するカメラのリストを取得する
+    def getCameraList(self, context):
+        return [(str(i), x.name, x.name) for i, x in enumerate(get_camera_list())]
+
     # 印刷DPIプロパティ（1インチあたりに何個ドット並んでいるかという解像度の単位）
     bpy.types.Scene.DPI = bpy.props.IntProperty(default=300, name='DPI', min=100)
 
@@ -543,6 +552,9 @@ class LENTI_PT_Menu(bpy.types.Panel):
     # 印刷サイズプロパティ(cm)
     bpy.types.Scene.printWidthCm = bpy.props.FloatProperty(default=9.1, name='PrintWidthCm', min=1.0)
     bpy.types.Scene.printHeightCm = bpy.props.FloatProperty(default=5.5, name='PrintHeightCm', min=1.0)
+
+    # カメラ選択プロパティ
+    bpy.types.Scene.mainCamera = bpy.props.EnumProperty(name="MainCamera", items=getCameraList)
 
     # 焦点距離設定プロパティ
     bpy.types.Scene.focusDist = bpy.props.FloatProperty(default=3.0, name='FocusDist', min=1.0, update=onFocusDistUpdate)
@@ -588,7 +600,10 @@ class LENTI_PT_Menu(bpy.types.Panel):
 
         self.layout.separator()     # ------------------------------------------
 
-        # 焦点設定ボタン
+        # メインカメラ選択
+        self.layout.prop(context.scene, "mainCamera")
+
+        # 撮影スタジオ構築ボタン
         self.layout.operator(LENTI_OT_BuildStudio.bl_idname)
 
         # 焦点距離プロパティ
