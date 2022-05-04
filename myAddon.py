@@ -512,11 +512,15 @@ class LENTI_OT_GenerateStereoscopic(bpy.types.Operator):
         pixels_left = image_left.pixels[:]
         pixels_right = image_right.pixels[:]
 
+        # 画像の大きさが違う場合は立体視できないため終了する
+        if image_left.size[0] != image_right.size[0] or image_left.size[1] != image_right.size[1]:
+            return False
+
         # 出力画像作成
         width_left = image_left.size[0]
         width_right = image_right.size[0]
         width_result = width_left + width_right
-        height_result = max(image_left.size[1], image_right.size[1])
+        height_result = image_left.size[1]
         new_image = bpy.data.images.new("stereoscopic", width=width_result, height=height_result)
         pixels_result = []
 
@@ -540,12 +544,15 @@ class LENTI_OT_GenerateStereoscopic(bpy.types.Operator):
         new_image.file_format = image_left.file_format
         new_image.save()
 
+        return True
+
     @classmethod
     def poll(cls, context):
         return is_select_output_directory()
 
     def execute(self, context):
-        self.generate(context, 0, 1)
+        if not self.generate(context, 0, 1):
+            return {'CANCELLED'}
 
         # 生成完了時に画像を開く
         open_image_in_main_window(self.get_result_image_path())
