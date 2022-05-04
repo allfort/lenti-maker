@@ -512,33 +512,23 @@ class LENTI_OT_GenerateStereoscopic(bpy.types.Operator):
         pixels_left = image_left.pixels[:]
         pixels_right = image_right.pixels[:]
 
-        print("pixels_left len=" + str(len(pixels_left)))
-
         # 出力画像作成
         width_left = image_left.size[0]
         width_right = image_right.size[0]
         width_result = width_left + width_right
         height_result = max(image_left.size[1], image_right.size[1])
         new_image = bpy.data.images.new("stereoscopic", width=width_result, height=height_result)
-
-        print("width_left = " + str(width_left))
-        print("width_right = " + str(width_right))
-        print("width_result = " + str(width_result))
-
-        pixels_result = [None] * width_result * height_result
+        pixels_result = []
 
         # ピクセル設定
-        for x in range(width_result):
-            p = pixels_left if x < width_left else pixels_right
-            w = width_left if x < width_left else width_right
-            x_ = x if x < width_left else x - width_left
-            for y in range(height_result):
-                r = p[(y * w + x_) * 4 + 0]
-                g = p[(y * w + x_) * 4 + 1]
-                b = p[(y * w + x_) * 4 + 2]
-                a = p[(y * w + x_) * 4 + 3]
+        for y in range(height_result):
+            # 左画像の横一列をコピーする
+            left = pixels_left[y * width_left * 4:(y + 1) * width_left * 4]
+            pixels_result.append(left)
 
-                pixels_result[(y * width_result) + x] = [r, g, b, a]
+            # 右画像の横一列をコピーする
+            right = pixels_right[y * width_right * 4:(y + 1) * width_right * 4]
+            pixels_result.append(right)
 
         # flatten list
         pixels_result = [chan for px in pixels_result for chan in px]
