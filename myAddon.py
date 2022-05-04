@@ -490,6 +490,79 @@ class LENTI_OT_GenerateResultImage(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# 結果の立体視画像を生成する
+class LENTI_OT_GenerateStereoscopic(bpy.types.Operator):
+    bl_idname = "lenti.generate_stereoscopic"
+    bl_label = "立体視画像生成"
+    bl_description = "立体視画像を生成する"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def get_result_image_path(cls):
+        file_name = 'stereoscopic'
+        suffix = '.png'
+        return os.path.join(get_output_base_directory(), file_name + suffix)
+
+    # 立体視画像生成
+    def generate(self, context, left, right):
+        # 出力画像読み込み
+        rendered_image_path_list = LENTI_OT_Rendering.get_rendered_image_path_list()
+        image_left = bpy.data.images.load(rendered_image_path_list[left], check_existing=False)
+        image_right = bpy.data.images.load(rendered_image_path_list[right], check_existing=False)
+        pixels_left = image_left.pixels[:]
+        pixels_right = image_right.pixels[:]
+
+        print("pixels_left len=" + str(len(pixels_left)))
+
+        # 出力画像作成
+        width_left = image_left.size[0]
+        width_right = image_right.size[0]
+        width_result = width_left + width_right
+        height_result = max(image_left.size[1], image_right.size[1])
+        new_image = bpy.data.images.new("stereoscopic", width=width_result, height=height_result)
+
+        print("width_left = " + str(width_left))
+        print("width_right = " + str(width_right))
+        print("width_result = " + str(width_result))
+
+        pixels_result = [None] * width_result * height_result
+
+        # ピクセル設定
+        for x in range(width_result):
+            p = pixels_left if x < width_left else pixels_right
+            w = width_left if x < width_left else width_right
+            x_ = x if x < width_left else x - width_left
+            for y in range(height_result):
+                r = p[(y * w + x_) * 4 + 0]
+                g = p[(y * w + x_) * 4 + 1]
+                b = p[(y * w + x_) * 4 + 2]
+                a = p[(y * w + x_) * 4 + 3]
+
+                pixels_result[(y * width_result) + x] = [r, g, b, a]
+
+        # flatten list
+        pixels_result = [chan for px in pixels_result for chan in px]
+
+        # assign pixels
+        new_image.pixels = pixels_result
+
+        new_image.filepath_raw = self.get_result_image_path()
+        new_image.file_format = image_left.file_format
+        new_image.save()
+
+    @classmethod
+    def poll(cls, context):
+        return is_select_output_directory()
+
+    def execute(self, context):
+        self.generate(context, 0, 1)
+
+        # 生成完了時に画像を開く
+        open_image_in_main_window(self.get_result_image_path())
+
+        return {'FINISHED'}
+
+
 # 出力先を選択する
 class LENTI_OT_SelectOutputDirectory(bpy.types.Operator, ExportHelper):
     bl_idname = "lenti.select_output_directory"
@@ -662,6 +735,9 @@ class LENTI_PT_Menu(bpy.types.Panel):
 
         # レンチキュラー画像生成ボタン
         self.layout.operator(LENTI_OT_GenerateResultImage.bl_idname)
+
+        # 立体視画像生成ボタン
+        self.layout.operator(LENTI_OT_GenerateStereoscopic.bl_idname)
 
 
 def register():
