@@ -57,6 +57,8 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
             if obj.name == cls.FOCUS_OBJ_NAME:
                 return obj
 
+        return None
+
     # レンダリングカメラのピボットを作成する
     @classmethod
     def create_pivot_object(cls, context):
@@ -179,7 +181,11 @@ class LENTI_OT_BuildStudio(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         # シーンカメラが存在するなら実行可能
-        return get_scene_camera() is not None
+        is_exist_camera = get_scene_camera() is not None
+        # 焦点オブジェクトが存在するなら既に構築済みのため実行不可能
+        is_not_exist_focus = cls.get_focus_object() is None
+
+        return is_exist_camera and is_not_exist_focus
 
     def execute(self, context):
         # 焦点オブジェクトを作成
